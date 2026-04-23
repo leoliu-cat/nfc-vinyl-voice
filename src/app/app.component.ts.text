@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, AfterViewInit, NgZone 
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-const API_BASE_URL = "https://sharememori-api.leo-liu-efd.workers.dev"; // TODO: 放上您部署好的 Cloudflare Worker 網址
+const API_BASE_URL = ""; // TODO: 放上您部署好的 Cloudflare Worker 網址
 
 const isMockMode = () => !API_BASE_URL;
 const LOCAL_STORAGE_PREFIX = "aws_mock_";
@@ -29,10 +29,8 @@ const getAudioUrl = async (id: string): Promise<string | null> => {
       // 假設 Cloudflare Worker 會幫我們從 S3 獲取預簽名網址或直接回傳音檔
       const res = await fetch(`${API_BASE_URL}/api/audio/${id}`);
       if (res.ok) {
-        //const data = await res.json();
-        //return data.url;
-        const blob = await res.blob();
-        return URL.createObjectURL(blob);
+        const data = await res.json();
+        return data.url;
       }
     } catch (e) {
       console.error("Failed to fetch from Cloudflare API", e);
