@@ -1,0 +1,155 @@
+<!-- Toast -->
+<div *ngIf="isToastVisible" class="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 animate-bounce">
+  <div class="bg-green-500 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 border border-green-400 backdrop-blur-sm bg-opacity-90">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+    <span class="font-semibold text-sm">{{toastMessage}}</span>
+  </div>
+</div>
+
+<!-- Loading Overlay -->
+<div *ngIf="isSyncing" class="absolute inset-0 z-50 bg-gray-900/80 backdrop-blur-sm flex flex-col items-center justify-center">
+  <div class="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+  <p class="text-white font-semibold animate-pulse">Syncing with cloud...</p>
+</div>
+
+<div class="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex flex-col items-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8 font-sans relative overflow-x-hidden">
+  <!-- Background decorations -->
+  <div class="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+    <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-purple-600/20 blur-[120px]"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-pink-600/20 blur-[120px]"></div>
+  </div>
+
+  <div class="w-full max-w-sm sm:max-w-md bg-gray-900/60 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-700/50 overflow-hidden relative z-10">
+    
+    <div class="p-5 sm:p-8 border-b border-gray-800">
+      <div class="flex justify-between items-center mb-2">
+        <h1 class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500 tracking-tight">
+          ShareMemori
+        </h1>
+        
+        <!-- Delete Button (Moved to top right) -->
+        <div class="relative" *ngIf="hasRecording">
+          <button *ngIf="!isConfirmingDelete" (click)="isConfirmingDelete = true; $event.stopPropagation()" class="p-4 -m-2 sm:p-2.5 sm:-m-0 bg-gray-800 hover:bg-gray-700 hover:text-red-400 text-gray-400 rounded-full border border-gray-700 transition-colors shadow-sm" title="Delete Recording">
+            <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+          </button>
+          
+          <div *ngIf="isConfirmingDelete" class="fixed inset-0 z-40" (click)="isConfirmingDelete = false; $event.stopPropagation()"></div>
+          
+          <div *ngIf="isConfirmingDelete" class="absolute top-full right-0 mt-3 w-52 bg-gray-800 border border-red-900/50 rounded-xl shadow-2xl p-4 z-50">
+            <p class="text-sm text-gray-200 mb-4 text-center font-bold">Delete this recording?</p>
+            <div class="flex gap-3">
+              <button (click)="deleteRecording(); $event.stopPropagation()" class="flex-1 bg-red-500/80 hover:bg-red-500 text-white py-2.5 rounded-lg text-sm font-bold transition-colors">Yes</button>
+              <button (click)="isConfirmingDelete = false; $event.stopPropagation()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 py-2.5 rounded-lg text-sm font-bold transition-colors">No</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="text-gray-400 text-sm font-medium">Record a voice message or share a song.</p>
+    </div>
+
+    <div class="p-5 sm:p-8">
+      <!-- Record Player Component -->
+      <div class="relative flex items-center justify-center w-56 h-56 sm:w-80 sm:h-80 mx-auto my-6 sm:my-8">
+        <div class="absolute -inset-4 sm:-inset-6 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 opacity-0 blur-2xl transition-all duration-500 transform-gpu" [class.!opacity-50]="appState === 'PLAYING_AUDIO'" [class.scale-105]="appState === 'PLAYING_AUDIO'"></div>
+        <div class="relative w-full h-full rounded-full bg-black border-4 border-gray-800 shadow-2xl flex items-center justify-center overflow-hidden" [class.animate-spin-slow]="appState === 'PLAYING_AUDIO' || isSpotifyPlaying" [class.transition-transform]="appState !== 'PLAYING_AUDIO' && !isSpotifyPlaying" [class.duration-700]="appState !== 'PLAYING_AUDIO' && !isSpotifyPlaying" [class.ease-out]="appState !== 'PLAYING_AUDIO' && !isSpotifyPlaying">
+          <div class="absolute inset-2 rounded-full border border-gray-800 opacity-50"></div>
+          <div class="absolute inset-4 rounded-full border border-gray-800 opacity-50"></div>
+          <div class="absolute inset-6 rounded-full border border-gray-800 opacity-50"></div>
+          <div class="absolute inset-8 rounded-full border border-gray-800 opacity-50"></div>
+          <div class="absolute inset-10 rounded-full border border-gray-800 opacity-50"></div>
+          <div class="absolute inset-12 rounded-full border border-gray-800 opacity-50"></div>
+          <div class="absolute inset-14 rounded-full border border-gray-800 opacity-50"></div>
+          <div class="absolute w-1/2 h-full bg-gradient-to-r from-transparent via-white to-transparent opacity-10 rotate-45 transform pointer-events-none"></div>
+          
+          <!-- Curved Text SVG -->
+          <svg viewBox="0 0 200 200" class="absolute inset-0 w-full h-full pointer-events-none z-0">
+            <path id="topCurve" d="M 40,100 A 60,60 0 0,1 160,100" fill="transparent" />
+            <path id="bottomCurve" d="M 160,100 A 60,60 0 0,1 40,100" fill="transparent" />
+            <text fill="#f3f4f6" font-family="Georgia, serif" font-size="15" font-weight="bold" letter-spacing="2">
+              <textPath href="#topCurve" startOffset="50%" text-anchor="middle">you're always</textPath>
+            </text>
+            <text fill="#f3f4f6" font-family="Georgia, serif" font-size="15" font-weight="bold" letter-spacing="2">
+              <textPath href="#bottomCurve" startOffset="50%" text-anchor="middle">in every way</textPath>
+            </text>
+          </svg>
+
+          <!-- Center Label -->
+          <div class="absolute w-28 h-28 sm:w-36 sm:h-36 bg-gradient-to-br from-orange-400 via-pink-400 to-yellow-300 rounded-full border border-black flex flex-col items-center justify-center shadow-inner z-10">
+            <span style="font-family: 'Brush Script MT', 'Great Vibes', cursive; color: white; text-shadow: 1px 1px 3px rgba(0,0,0,0.3); transform: rotate(-10deg);" class="text-3xl sm:text-4xl leading-none z-10">Favorite</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="flex flex-col items-center gap-6">
+        <div *ngIf="appState === 'RECORDING'" class="flex flex-col items-center animate-pulse">
+          <span class="text-red-500 font-mono text-xl font-bold tracking-wider">{{formatTime(recordingTime)}}</span>
+          <span class="text-gray-400 text-xs uppercase tracking-widest mt-1">Recording...</span>
+        </div>
+
+        <div class="flex justify-center gap-4 w-full">
+          <ng-container *ngIf="!hasRecording">
+            <button *ngIf="appState !== 'RECORDING'" (click)="startRecording()" class="flex-1 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white rounded-2xl py-4 px-6 font-bold shadow-lg shadow-red-500/30 transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-white animate-pulse"></div>
+              Record Message
+            </button>
+            <button *ngIf="appState === 'RECORDING'" (click)="stopRecording()" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white rounded-2xl py-4 px-6 font-bold border border-gray-600 transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2">
+              <div class="w-3 h-3 bg-red-500 rounded-sm"></div>
+              Stop Recording
+            </button>
+          </ng-container>
+
+          <ng-container *ngIf="hasRecording">
+            <button (click)="toggleAudioPlayback()" class="flex-1 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white rounded-2xl py-4 px-6 font-bold shadow-lg shadow-purple-500/30 transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2">
+              <svg *ngIf="appState !== 'PLAYING_AUDIO'" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" fill-rule="evenodd"></path></svg>
+              <svg *ngIf="appState === 'PLAYING_AUDIO'" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+              {{appState === 'PLAYING_AUDIO' ? 'Pause' : 'Play Message'}}
+            </button>
+          </ng-container>
+        </div>
+      </div>
+    </div>
+
+    <!-- Spotify Section -->
+    <div class="bg-gray-900/80 p-5 sm:p-8 border-t border-gray-800">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+          <svg class="w-5 h-5 text-[#1DB954]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.84.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15.001 10.62 18.66 12.9c.42.18.6.78.301 1.14zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.6.18-1.2.72-1.38 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.539-1.56.299z"/></svg>
+          Linked Song
+        </h3>
+        <button *ngIf="!isEditingSpotify" (click)="isEditingSpotify = true" class="text-xs text-purple-400 hover:text-purple-300 font-semibold transition-colors">
+          Change
+        </button>
+      </div>
+
+      <div *ngIf="isEditingSpotify" class="mb-4 animate-fade-in">
+        <div class="flex flex-col gap-3">
+          <p class="text-xs text-gray-400">Find your favorite song on Spotify, click share, and paste the link here.</p>
+          <input 
+            type="text" 
+            [(ngModel)]="spotifyInput" 
+            (paste)="onPaste($event)"
+            autocomplete="off" 
+            autocorrect="off" 
+            autocapitalize="off" 
+            spellcheck="false"
+            placeholder="Paste Spotify track link here..." 
+            class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#1DB954] focus:border-transparent transition-all"
+          />
+          <div class="flex gap-2">
+            <button (click)="saveSpotifyTrack()" class="flex-1 bg-[#1DB954] hover:bg-[#1ed760] text-gray-900 py-2 rounded-xl text-sm font-bold transition-colors">Save</button>
+            <button (click)="isEditingSpotify = false" class="px-4 bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded-xl text-sm font-bold transition-colors">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="relative rounded-xl overflow-hidden shadow-lg bg-black/50">
+        <div id="spotify-iframe"></div>
+        <!-- iOS Safari Fix: Transparent overlay over the title/album art to prevent iframe self-navigation -->
+        <a *ngIf="spotifyTrackId" [href]="'https://open.spotify.com/track/' + spotifyTrackId" target="_blank" rel="noopener noreferrer" 
+           class="absolute top-0 left-0 w-[70%] h-[65%] z-10 block" title="Open in Spotify">
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

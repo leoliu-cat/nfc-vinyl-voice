@@ -1,0 +1,5 @@
+{
+  "name": "NFC Vinyl Voice",
+  "description": "A voice recording app with a spinning vinyl record animation.",
+  "requestFramePermissions": ["microphone"]
+}
