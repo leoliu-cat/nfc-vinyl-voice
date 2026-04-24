@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, AfterViewInit, NgZone 
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-const API_BASE_URL = "https://sharememori-api.leo-liu-efd.workers.dev"; // TODO: 放上您部署好的 Cloudflare Worker 網址
+const API_BASE_URL = "https://api.sharememori.com"; // TODO: 放上您部署好的 Cloudflare Worker 網址
 
 const isMockMode = () => !API_BASE_URL;
 const LOCAL_STORAGE_PREFIX = "aws_mock_";
