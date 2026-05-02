@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, AfterViewInit, NgZone 
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-const API_BASE_URL = "https://api.sharememori.com"; // TODO: 放上您部署好的 Cloudflare Worker 網址
+const API_BASE_URL = ""; // TODO: 放上您部署好的 Cloudflare Worker 網址
 
 const isMockMode = () => !API_BASE_URL;
 const LOCAL_STORAGE_PREFIX = "aws_mock_";
@@ -31,11 +31,28 @@ const base64ToBlob = async (base64: string): Promise<Blob> => {
 const getAudioUrl = async (id: string): Promise<string | null> => {
   if (!isMockMode()) {
     try {
-      // 假設 Cloudflare Worker 會幫我們從 S3 獲取預簽名網址或直接回傳音檔
       const res = await fetch(`${API_BASE_URL}/api/audio/${id}`);
       if (res.ok) {
-        const data = await res.json();
-        return data.url;
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          return data.url;
+        } else {
+          // Fallback if the worker returns direct binary
+          const arrayBuffer = await res.arrayBuffer();
+          let actualType = 'audio/mp4';
+          
+          if (arrayBuffer.byteLength >= 4) {
+            const view = new DataView(arrayBuffer);
+            const magic = view.getUint32(0, false);
+            if (magic === 0x1A45DFA3) {
+              actualType = 'audio/webm';
+            }
+          }
+          
+          const blob = new Blob([arrayBuffer], { type: actualType });
+          return URL.createObjectURL(blob);
+        }
       }
     } catch (e) {
       console.error("Failed to fetch from Cloudflare API", e);
