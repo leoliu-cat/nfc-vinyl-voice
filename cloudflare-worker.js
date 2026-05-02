@@ -93,7 +93,12 @@ export default {
       // ==========================================
 
       // 連線至 Neon Postgres
-      const client = new Client(env.NEON_DATABASE_URL);
+      //const client = new Client(env.NEON_DATABASE_URL);
+      const client = new Client({
+
+        connectionString: env.NEON_DATABASE_URL
+      
+      });
       await client.connect();
 
       // 上傳 / 更新 Metadata
