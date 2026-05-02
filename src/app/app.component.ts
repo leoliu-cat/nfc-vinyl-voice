@@ -20,7 +20,12 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 
 const base64ToBlob = async (base64: string): Promise<Blob> => {
   const response = await fetch(base64);
-  return await response.blob();
+  const blob = await response.blob();
+  if (blob.type === 'application/octet-stream' || !blob.type) {
+    const isMp4 = base64.includes('audio/mp4');
+    return new Blob([blob], { type: isMp4 ? 'audio/mp4' : 'audio/webm' });
+  }
+  return blob;
 };
 
 const getAudioUrl = async (id: string): Promise<string | null> => {
@@ -29,10 +34,8 @@ const getAudioUrl = async (id: string): Promise<string | null> => {
       // 假設 Cloudflare Worker 會幫我們從 S3 獲取預簽名網址或直接回傳音檔
       const res = await fetch(`${API_BASE_URL}/api/audio/${id}`);
       if (res.ok) {
-        //const data = await res.json();
-        //return data.url;
-        const blob = await res.blob();
-        return URL.createObjectURL(blob);
+        const data = await res.json();
+        return data.url;
       }
     } catch (e) {
       console.error("Failed to fetch from Cloudflare API", e);
@@ -55,12 +58,13 @@ const uploadToS3 = async (id: string, blob: Blob): Promise<string> => {
   if (!isMockMode()) {
     try {
       // 透過 Cloudflare Worker 上傳至 S3
-      const reqBlob = new Blob([blob], { type: "audio/mp4" });
+      const mimeType = blob.type || 'audio/mp4';
+      const reqBlob = new Blob([blob], { type: mimeType });
       const res = await fetch(`${API_BASE_URL}/api/audio/${id}`, {
         method: 'PUT',
         body: reqBlob,
         headers: {
-          'Content-Type': 'audio/mp4'
+          'Content-Type': mimeType
         }
       });
       if (res.ok) {
@@ -120,6 +124,52 @@ const loadMetadataFromS3 = async (id: string): Promise<string | null> => {
   return null;
 };
 
+// 方案：HMAC 加密簽名防呆機制
+// 此密鑰用來對 ID 進行簽名。在正式環境中，這個 Secret 絕對不可以外洩。
+const NFC_SECRET = 'ministylecards-nfc-secret-key';
+
+// Helper: 將依賴十六進位的簽名轉成 byte array 給 SubtleCrypto 驗證
+function hexToBytes(hex: string): Uint8Array | null {
+  if (!hex || hex.length % 2 !== 0) return null;
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+// 驗證 HMAC-SHA256 簽名
+async function verifyHmacSignature(id: string, signatureHex: string): Promise<boolean> {
+  try {
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(NFC_SECRET);
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+    );
+    const sigBytes = hexToBytes(signatureHex);
+    if (!sigBytes) return false;
+    
+    return await crypto.subtle.verify('HMAC', cryptoKey, sigBytes, encoder.encode(id));
+  } catch (e) {
+    return false;
+  }
+}
+
+// 開發者工具：在瀏覽器 Console 中你可以執行 window.generateNfcLink("你的任意ID") 
+// 來快速產生帶有合法簽名的測試網址
+(window as any).generateNfcLink = async (id: string) => {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(NFC_SECRET);
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(id));
+  const signatureHex = Array.from(new Uint8Array(signatureBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const url = `${window.location.origin}${window.location.pathname}?id=${id}&sig=${signatureHex}`;
+  console.log(`合法寫入網址:\n${url}`);
+  return url;
+};
+
 @Component({
   selector: 'app-root',
   standalone: true,
@@ -133,12 +183,15 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   audioUrl: string | null = null;
   isConfirmingDelete = false;
   isSyncing = false;
+  syncMessage = 'Syncing...';
   spotifyTrackId = '0tgVpDi06FyKpA1z0VMD4v';
   isEditingSpotify = false;
   spotifyInput = '';
   cloudId = 'demo-default';
   isSpotifyPlaying = false;
   spotifyController: any = null;
+  
+  isInvalidNfc = false;
 
   toastMessage = '';
   isToastVisible = false;
@@ -235,18 +288,28 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   async ngOnInit() {
     const urlParams = new URLSearchParams(window.location.search);
     let id = urlParams.get('id');
+    const sig = urlParams.get('sig'); // 獲取 signature
     
-    // 如果網址沒有提供 id，自動產生一組 Random UUID 以利獨立寫入測試
+    // 如果沒有附帶 id，或者是舊的 demo-default (為了讓你在沒有參數時可以測試，這裡保持開放 demo-default)
     if (!id || id === 'demo-default') {
-      id = ("crypto" in window && typeof crypto.randomUUID === "function") 
-        ? crypto.randomUUID() 
-        : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      
-      const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?id=' + id;
-      window.history.replaceState({path: newUrl}, '', newUrl);
+       id = 'demo-default';
+       this.cloudId = id;
+    } else {
+       // HMAC 防呆：檢查 URL 上的 ID 與 sig 是否成功匹配
+       if (!sig) {
+          this.isInvalidNfc = true;
+          return; // 沒有帶簽名直接拒絕
+       }
+       
+       const isValid = await verifyHmacSignature(id, sig);
+       if (!isValid) {
+          this.isInvalidNfc = true;
+          return; // 簽名不正確直接拒絕
+       }
+       
+       this.cloudId = id;
     }
     
-    this.cloudId = id;
 
     this.isSyncing = true;
     
@@ -284,11 +347,43 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   async startRecording() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.syncMessage = 'Waking up microphone...';
+      this.isSyncing = true;
+      this.cdr.detectChanges();
+
+      // Wake up the audio hardware via playback path early
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          ctx.resume();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          gain.gain.value = 0; // Silent
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(0);
+          osc.stop(ctx.currentTime + 0.1);
+        }
+      } catch (e) {}
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      } });
       
+      // Much shorter warmup to prevent long UX delay, hardware is kept awake by AudioCtx
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      this.isSyncing = false;
+      this.syncMessage = 'Syncing...'; // reset
+
       let options: MediaRecorderOptions = {};
       if (MediaRecorder.isTypeSupported('audio/mp4')) {
         options.mimeType = 'audio/mp4';
+      } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        options.mimeType = 'audio/webm;codecs=opus';
       } else if (MediaRecorder.isTypeSupported('audio/webm')) {
         options.mimeType = 'audio/webm';
       }
@@ -302,7 +397,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
       this.mediaRecorder.onstop = () => {
         this.ngZone.run(async () => {
-          const audioBlob = new Blob(this.audioChunks, { type: this.mediaRecorder!.mimeType || 'audio/webm' });
+          const actualMimeType = this.mediaRecorder!.mimeType || (this.audioChunks[0] && this.audioChunks[0].type) || 'audio/webm';
+          const audioBlob = new Blob(this.audioChunks, { type: actualMimeType });
           this.isSyncing = true;
           this.cdr.detectChanges();
           
@@ -350,12 +446,21 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       this.audioElement.pause();
       this.appState = 'IDLE';
     } else {
+      if (!this.audioElement.src) {
+        this.triggerToast("No audio source found");
+        return;
+      }
       const playPromise = this.audioElement.play();
       if (playPromise !== undefined) {
         playPromise.catch(e => {
           console.error("Audio play failed:", e);
-          this.triggerToast("Unable to play audio format");
           this.appState = 'IDLE';
+          
+          if (e.name === 'NotSupportedError') {
+             this.triggerToast("Audio format not supported on this device. (Please try re-recording)");
+          } else {
+             this.triggerToast("Unable to play recording.");
+          }
           this.cdr.detectChanges();
         });
       }
@@ -378,8 +483,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     this.appState = 'IDLE';
     
     this.audioElement.pause();
-    this.audioElement.removeAttribute('src');
-    this.audioElement.load();
+    this.audioElement.src = '';
     
     this.isSyncing = false;
     this.triggerToast("Recording deleted");

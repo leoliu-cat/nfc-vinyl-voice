@@ -3,7 +3,22 @@
 @tailwind utilities;
 
 @layer utilities {
+  @keyframes slowSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
   .animate-spin-slow {
-    animation: spin 4s linear infinite;
+    animation: slowSpin 20s linear infinite;
+  }
+
+  @keyframes pulseSoft {
+    0% { box-shadow: 0 0 0 rgba(248, 175, 166, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(248, 175, 166, 0.4); }
+    100% { box-shadow: 0 0 0 rgba(248, 175, 166, 0.3); }
+  }
+
+  .btn-glow {
+    animation: pulseSoft 3s infinite;
   }
 }
